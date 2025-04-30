@@ -1,0 +1,12 @@
+rm ./build/*
+(cd ./src && go build -o ../build/client ./client/client.go)
+(cd ./src && go build -o ../build/client_fork ./client_fork/client_fork.go)
+(cd ./src && go build -o ../build/client_five ./client_five/client_five.go)
+(cd ./src && go build -o ../build/miner ./miner/miner.go)
+(cd ./src && go build -o ../build/miner_five ./miner_five/miner_five.go)
+(cd ./src && go build -o ../build/miner_lazy ./miner_lazy/miner_lazy.go)
+(cd ./src && go build -o ../build/miner_fork ./miner_fork/miner_fork.go)
+(cd ./src && go build -o ../build/miner_honest ./miner_honest/miner_honest.go)
+(cd ./src && go build -o ../build/miner_malicious1 ./miner_malicious1/miner_malicious1.go)
+(cd ./src && go build -o ../build/miner_malicious2 ./miner_malicious2/miner_malicious2.go)
+(cd ./src && go build -o ../build/miner_malicious3 ./miner_malicious3/miner_malicious3.go)

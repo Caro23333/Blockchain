@@ -1,0 +1,308 @@
+\documentclass[12pt]{article}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{caption}
+\usepackage{indentfirst}
+\geometry{a4paper, margin=1in}
+
+\setlength{\parindent}{2em}
+
+\title{Final Report for Blockchain Project}
+\author{Jingyi Lv, Wenjie Huang, Xiang Gao}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+%\begin{abstract}
+%This is the abstract of the report. It provides a brief summary of the content.
+%\end{abstract}
+
+%\tableofcontents
+
+\section{Introduction}
+In this project, we write a project to implement the basic blockchain structure and add some features to improve it.
+The blockchain is a decentralized and distributed ledger that records transactions across many computers. 
+We implement the blockchain in GO language. We add a few example of malicious nodes to the blockchain to show its security. 
+We also give an example of blockchain fork to show that the longest chain rule is correctly applied.
+And we test its efficiency in terms of the time it takes to add a new block to the chain under different difficulty levels (difficulty can be changed in the client).
+
+In addition to the basic structure, we add three new features to the blockchain.
+First, we add fees to the transactions. The fees are paid to the miners who add the transactions to the blockchain to make miners more active.
+Second, we give the client the ability to add new nodes in the network. The client can also create connection between nodes. So theoretically, we can get any topology of nodes' connection we want.
+Finally, we add a graphical interface for the client so we do not need to type the inputs in the terminal and we can get some prompts about what we can do.
+
+\section{Design for Part 1}
+This section describes the basic structure of the blockchain.
+
+We have two kinds of agents in the system: the client and the miner. The client is the user who wants to interact with the blockchain. The miner is the computer that stores the blockchain, mines new blocks and verifies the transactions.
+
+In part 1, the miners are fully connected. Each miner has a mining thread. The miner thread needs to generate the nonce randomly.
+And when the hash function has enough power (0s at the beginning), (at final\_project21/src/miner/miner.go: 339) the miner can create a block. And the block will be broadcast to all the miners.
+
+When a miner receives a block (function onNewBlockAppearance()), it will verify the block. 
+First it will check the block's power (stated before). Then it will check the block's transactions.
+If the block is valid, the miner will add the block to its blockchain (into block\_pool). If the block is invalid, the miner will discard the block (not discarding the valid transactions in it).
+
+The client can check the balance of every miner by inputting ``query''.
+The client can also add transactions to the blockchain. The format is to input ``tx \{source\} \{destination\} \{value\}''. Then the source will send the value to the destination in a transaction.
+The source will get the request of the transaction from the client. Then it will collect the UTXOs of itself to reach the required value. 
+Then it will put these UTXOs into the inputs of the transaction and sign each input with its private key.
+Then it will create an output with the public key of the destination. It will also create an output to itself if there is remained collected value.
+And it will sign all the outputs with its private key. (at final\_project21/src/miner/miner.go: 548~581)
+Finally, it will broadcast the transaction to all the miners.
+
+When the miners receive the transaction (function onNewTransactionAppearance()), they will put the transaction into the transaction\_pool. And When a miner creates a new block, it will put the transactions in the transaction\_pool into the block.
+It will also create a special transaction for itself, which is the coin creation reward. (at final\_project21/src/miner/miner.go: 356,357) 
+When validating the block, the miner will check the transactions in the block. (Just as what we stated before.) The validating method include whethter the UTXOs are valid, whether the signature is correct and not stale, whether the input value is enough to cover the output value, etc. 
+The coin creation reward must only appear once, and its value should be fixed.
+If the transaction is valid, the miner will add the transaction to the UTXO pool. If the transaction is invalid, the miner will discard the transaction.
+
+To show the things more clearly, we let the miners print out every block with different formats when it's valid or invalid. 
+
+Another thing is about the longest chain rule. When a miner receives a block, it will check whether the block is in the longest chain. 
+The checking method is to check whether the TotalDifficulty of the block is bigger than the current block at the main\_chain\_head. If it is, the miner will put it on the main\_chain\_head. And the whole main chain will be updated.
+
+The Difficulty of each block is 2 to the power of the number of 0s at the beginning of the hash. The TotalDifficulty of each block is the sum of the Difficulty of all the blocks before it in a chain.
+The client can change the difficulty by inputting ``adjust \{difficulty\}''. Then the required number of 0s at the beginning of the hash will be the ``difficulty'' that has been input. The default difficulty is 24.
+
+\section{Settings for Experiments of Malicious or Lying or Forking Nodes}
+To prove that our blockchain can work securely and fairly, we need to test it with some bad nodes.
+
+\subsection{Malicious Nodes}
+We add three kinds of malicious nodes to the blockchain.
+
+The first kind of malicious node (at final\_project21/src/miner\_mailcious1/miner\_malicious1.go) tries to pocket all the outputs of the transactions in the block it mines.
+It will change the destination of the outputs to itself. However, it cannot sign the outputs with the private key of the source.
+When the other miners receive the block, they will check the transactions in the block. They will find that the signature of the outputs are not valid. (Outputing ``Output signature verification fail'') So the transaction is invalid. The miners will discard the block.
+
+The second kind of malicious node (at final\_project21/src/miner\_mailcious2/miner\_malicious2.go) tries to double spend the UTXOs.
+When they are requested to create a transaction, they will create two transactions with the same UTXOs in the inputs. One transaction for the destination and one for itself.
+When the other miners receive the block containing the transactions, they will check the transactions in the block. They will find that the UTXOs are already spent. (Outputing ``UTXO verification fail'') So the transaction is invalid. The miners will discard the block.
+
+The third kind of malicious node (at final\_project21/src/miner\_mailcious3/miner\_malicious3.go) tries to create transactions with stale signatures.
+They have a thread to create transactions with stale signatures, always using the same output to itself. The transactions will be broadcast to all the miners.
+When the other miners receive the block containing the transaction, they will check the transactions in the block. They will find that the signature is stale. (Outputing ``Stale message'') So the transaction is invalid. The miners will discard the block.
+
+Other malicious nodes can be added in the same way. Includign nodes that tries to broadcast transactions with stale inputs (which will be directly rejected at onNewTransactionAppearance()), nodes that tries to broadcast blocks with invalid coin creation, etc.
+None of them threats the security of the blockchain.
+
+\subsection{Lying Nodes}
+
+Sometimes the miners are not trying to have fake transactions, but to get more coin creation rewards, they may lie about their mining speed by creating blocks that do not have enough power.
+We create a miner that will create blocks with less power than the required difficulty but still claim the original difficulty. (at final\_project21/src/miner\_lazy/miner\_lazy.go)
+When the other miners receive the block, they will check the block's power. If the block does not have enough power, the miners will discard the block while outputing ``PoW invalid''.
+
+\subsection{Forking Nodes}
+
+To show that the longest chain rule is correctly applied, we create a miner that will create a fork of the blockchain. (at final\_project21/src/miner\_fork/miner\_fork.go), it should be used with two other miners. (at final\_project21/src/miner\_honest/miner\_honest.go)
+The honest node can only mine at a low speed (mine with higher difficulty than requested at miner\_honest.go:342). The fork node can mine at a high speed. However, the fork node start to broadcast the blocks it mined after 35 seconds. So the honest node can mine a few blocks before the fork node starts to broadcast.
+When the fork node starts to broadcast, the honest node will receive the blocks, which creates a longer chain. The honest node will put the blocks into the main chain. While the fork node can receive the blocks from the honest node from the beginning, it does not put these blocks on the main chain since their TotalDifficulty is smaller than its own blocks.
+
+\section{Prediction on Features can be Added in Part 2}
+
+In the next part, we will add some features to the blockchain to make it more efficient and convenient.
+We can add a feature to give priority to some of the transactions, so that the miners can choose which transactions to pack first (assuming that the block can be full).
+We can also add a feature to allow nodes to work when they are not fully connected. The nodes can have different topologies, just like in real world.
+We can also try to give more prompts when the client is using the blockchain, so that the client can know what they can do and what they cannot do.
+
+\section{Results for the Efficiency of Blockchain}
+
+We test the blocks can be created in a minute under different difficulties. We repeat the test and get the average blocksper minute. 
+
+\includegraphics[width=0.5\textwidth]{../img_blockchain/effi_plot.png}
+
+The result shows that the blockchain has a reasonable speed of creating blocks. The speed is faster when the difficulty is lower. 
+And when the log of difficulty reduces by 2, the speed of creating blocks is about four times faster, which matches our prediction.
+This shows that the definition of difficulty in the system can show the workload of mining a block. This is very important, since we use the total difficulty to judge the longest chain.
+
+Another discovery is that the speed of creating blocks is not strictly linear to the difficulty. When the difficulty is higher, the speed of creating blocks is slower than the linear prediction. A possible explanation is that the hash function has its randomness, 
+and when the difficulty is higher, the number of blocks generated in a minute is smaller, so the randomness has a bigger impact on the result, resulting in a huger error.
+
+\section{Feature 1: Fee for Transaction}
+
+In the original design, the miners just pack all the transactions in the transaction\_pool when they create a new block.
+However, when there are too many transactions in the transaction\_pool that exceeds the capacity of the pool, the miners need to choose which transactions to pack, and it may set a sequence of priority.
+As a way to encourage the miners, we add a fee to each transaction. The fee is paid to the miner who mines the block containing the transaction by the ``source''.
+The miner will pack the transactions with highest fees first until the transaction\_pool is empty or the block is full.\\
+
+\begin{minipage}{0.45\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{../img_blockchain/fee_fig1.png}
+    \captionof{figure}{The graphical interface of transaction creation}
+\end{minipage}
+\hfill
+\begin{minipage}{0.45\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{../img_blockchain/fee_fig2.png}
+    \captionof{figure}{Two blocks with different fees}
+\end{minipage}
+Under this setting, we have some new assumptions:
+\begin{itemize}
+    \item The client should input ``tx \{source\} \{destination\} \{value\} \{fee\}'' to create a transaction. (In the graphical interface, this means filling 4 blanks instead of 3, like Figure 1.)
+    \item The fee should be non-negative.
+    \item The sum of output values and the fee in a transaction cannot exceed the input values, not larger than the sum of values in the collected UTXOs.
+    \item The miner should produce just one fee transaction in the block it mines for every transaction with a fee.
+    \item The fee transaction cannot have a fee, the same for a coin creation.
+    \item There is only one output in the fee transaction, and the value in it is just the fee of the transaction it corresponds to.
+\end{itemize}
+
+\vspace{1em}
+The Figure 2 is an example of how the fee works:
+%\includegraphics{width=0.5\textwidth}{fee.png}
+We can see that the first block has the transactions with higher fees. The second block has the transactions with lower fees. 
+
+\section{Feature 2: Add New Nodes}
+
+In the original design, the miners are fully connected. However, in the real world, the nodes can have different kinds of topologies.
+We add a feature that the client can add new nodes to the network. The client can also create connections between nodes.
+
+When there is a new node, the client should get an input ``newnode \{miner\_id\}'' (or just ``Add New Miner'' in the graphic interface, like in the Figure 3).
+The client will call an RPC service ``Greet'' to the miner to ensure that the miner is working (at final\_project22/src/client/client.go:74). If the miner is working, the client will add the miner to the connection\_pool.\\
+
+\begin{minipage}{0.45\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{../img_blockchain/add_miner.png}
+    \captionof{figure}{The graphical interface of adding new miner}
+\end{minipage}
+\hfill
+\begin{minipage}{0.45\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{../img_blockchain/connect.png}
+    \captionof{figure}{The graphical interface of creating connection}
+\end{minipage}
+
+\vspace{1em}
+In the new setting, a new assumption is that a miner would not start to work when it is in a network of only one miner. 
+This assumption is used to avoid too much forks when there are many single nodes. So a node should be added to the network by the client.
+When the client wants to create a connection between two nodes, the client should input ``connect \{source\_id\} \{dest\_id\}''.
+Another assumption is that when the ``connect'' operation connects a new node into the network, the new node should be regard as the source.
+%(This is solved in the graphic interface, where we can alter the sequence of the nodes.)
+When the ``source'' miner receives the RPC ``ConnectTo'' request, it can send a ``ConnectFrom'' request to the ``dest'' miner. 
+The ``dest'' miner can judge whether the ``source'' is a new node (a bool variable ``is\_new'') based on the node\_list it has. If ``is\_new''is not true, the two miners will simply be connected.
+Otherwise, the ``dest'' miner will send the ``source'' miner the whole blockchain it has (including the difficulty). The synchronization process including ``SyncHead'', ``NewSyncBlock'' and ``SyncTail''. When the synchronization is completed.
+A zero will be pushed into sync\_signal channel to indicate the completion of the synchronization. The ``source'' miner will then start its own work.
+
+\section{Feature 3: GUI}
+
+In the original design, the users have to interact with the console to do transaction or query balance. However, it is not convenient to users, especially those who know little about programming. So, we implement a GUI (Graphical User Interface) to make users more comfortable, provide more prompts to available operations, as well as increase type-safety.
+
+A design idea of this GUI is to make the interface Simple. So we do not squeeze all the operation buttons into the main menu, but lead the user step-by-step to what he/she want, and do not show surplus buttons in the middle.
+
+\subsection*{Functionality.}
+
+The users of the GUI are divided into users and administrators.
+
+Users can query balance and do transaction through the command buttons. 
+
+% \begin{minipage}{0.45\textwidth}
+%     \centering
+%     \includegraphics[width=\textwidth]{img_blockchain/gui_query.png}
+%     \captionof{figure}{query balance}
+% \end{minipage}
+% \hfill
+% \begin{minipage}{0.45\textwidth}
+%     \centering
+%     \includegraphics[width=\textwidth]{img_blockchain/gui_tx.png}
+%     \captionof{figure}{do transaction}
+% \end{minipage}
+
+And, if some one enters some arguments with wrong type, it will detect and remind, whether in the frontend or in the backend whose error message is passed to the frontend through the network. For example, in the transaction, entering negetive indices belong to the former one, while entering indices which are not yet connected to the client belong to the latter one. 
+
+% \begin{minipage}{0.45\textwidth}
+%     \centering
+%     \includegraphics[width=\textwidth]{img_blockchain/gui_tx_negative.png}
+%     \captionof{figure}{enter a negative index}
+% \end{minipage}
+% \hfill
+% \begin{minipage}{0.45\textwidth}
+%     \centering
+%     \includegraphics[width=\textwidth]{img_blockchain/gui_tx_no_connection.png}
+%     \captionof{figure}{enter an index that has not connected}
+% \end{minipage}
+
+Finally, the user and the administrator can set the public ip, client port, and username as used in ssh command. Do not forget to set correct client port before doing any operations. And, the administrator can flush temp (what it indeed means is told in the Implementation part below). 
+
+% \begin{minipage}{0.45\textwidth}
+%     \centering
+%     \includegraphics[width=\textwidth]{img_blockchain/gui_settings.png}
+%     \captionof{figure}{settings}
+% \end{minipage}
+% \hfill
+% \begin{minipage}{0.45\textwidth}
+%     \centering
+%     \includegraphics[width=\textwidth]{img_blockchain/gui_flush_temp.png}
+%     \captionof{figure}{admin flush temp}
+% \end{minipage}
+
+\subsection*{Implementation.}
+
+The GUI feature contains two parts: frontend and backend. We met some trade-offs in developing both parts, and finally choose to: optimize developing efficiency, balancing implementation elegance, and considering speed. This is because: DDL is urgent, elegant code is more readable, but speed does not matter too much because GUI is used by human who are much slower than CPUs.
+
+The frontend is finally implemented in Python on PyQt5 and packed by pyinstaller into an exe file in Windows. The other choice, VB, was ruled out because for the shell command Python can run but VB cannot run.
+
+The backend, well, is a simple communication system based on files. We use this to overcome the main technology barrier: client is always on, but frontend needs to call client at any time. Other choices, including using some advanced packages that provide more direct manipulation on running processes, are ruled out because: on one hand. they requires reading documents and possible building environments which has high uncertainty or high variance of developing time, on the other hand, here we do not need to implement an entire file-based communication system with universal functionalities.
+
+\subsubsection*{Frontend.}
+
+The main window is \texttt{class BitcoinGUI(QWidget)}. Then, except for ``Query Miner's Balance'' and ``Flush Temp'', each operation button triggers a dialog that further asks for the arguments. The corresponding triggering functions are named by ``to...''. The dialogs and corresponding triggering functions are:
+
+\begin{itemize}
+    \item \texttt{class SettingsDialog(QDialog)} \quad -- \quad \texttt{def toSettings(self)}
+    \item \texttt{class TxDialog(QDialog)} \quad -- \quad \texttt{def toTx(self)}
+    \item \texttt{class AdjustDialog(QDialog)} \quad -- \quad \texttt{def toAdjust(self)}
+    \item \texttt{class ConnectDialog(QDialog)} \quad -- \quad \texttt{def toConnect(self)}
+    \item \texttt{class NewnodeDialog(QDialog)} \quad -- \quad \texttt{def toNewnode(self)}
+\end{itemize}
+
+When the user enters arguments and clicks the button in the newly appeared dialog, the actual action starts. The functions doing actual actions are named by ``do...'', including that of ``Query Miner's Balance'' and ``Flush Temp''. The functions are:
+
+\begin{itemize}
+    \item \texttt{def doSet(self)}
+    \item \texttt{def doFlushTemp(self)}
+    \item \texttt{def doQuery(self)}
+    \item \texttt{def doTx(self)}
+    \item \texttt{def doAdjust(self)}
+    \item \texttt{def doConnect(self)}
+    \item \texttt{def doNewnode(self)}
+\end{itemize}
+
+Each operation shows its result in a message box \texttt{QMessageBox.information}, except Query which shows its result in a dialog \texttt{class QueryResultDialog(QDialog)} through a table \texttt{QTableWidget()} to display the query result more conveniently.
+
+\subsubsection*{Backend.}
+
+In the deployed repository \texttt{final\_project22\_deployed}, there are 4 important files (from now on omit the path when referring to them):
+
+\begin{itemize}
+    \item \texttt{build/client}: always on, monitoring \texttt{command.txt}, writes to \texttt{result.txt}
+    \item \texttt{build/helper}: started by the frontend, writes to \texttt{command.txt}, monitoring \texttt{result.txt}
+    \item \texttt{temp/command.txt}: contains timestamp, command, ending symbol
+    \item \texttt{temp/result.txt}: contains timestamp, result, ending symbol
+\end{itemize}
+
+Note: Here we manually implement a Lamport-style integer-based logic timestamp to be more elegant and avoid physical timestamp conflict. Here the ending symbol, as well as the empty symbol when first deployed or flushed, are designed to avoid file asynchronization error, e.g. the helper wants to write ``1 tx 2 3 456 78'', but when it writes to ``1 tx 2 3 456 7'' the client reads.
+
+A whole lifecycle of a request is:
+
+\begin{itemize}
+    \item user chooses the operation, enters arguments, and clicked the actual action button
+    \item frontend do type-safe check and send \texttt{ssh} command to start remote \texttt{helper}
+    \item \texttt{helper} write the command into \texttt{command.txt} and monitors \texttt{result.txt}
+    \item \texttt{client}, monitoring \texttt{command.txt}, executes the command and outputs to \texttt{result.txt}
+    \item \texttt{helper}, monitoring \texttt{result.txt}, returns the result
+    \item frontend obtains the result and displays it on the GUI
+\end{itemize}
+
+\section{Conclusion}
+In conclusion, we implemented a blockchain with security, efficiency and convenience. It has a reasonable speed of creating blocks and dealing with transactions.
+It is also quite robust facing different situations. And the new features, especially the graphical interface, make it more user-friendly. In the future, we will continue to improve the algorithm and resolve vulnerabilities if there are any. 
+
+%\section{References}
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

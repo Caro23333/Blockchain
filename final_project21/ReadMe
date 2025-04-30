@@ -1,0 +1,8 @@
+We conducted a blockchain system in this project. There can be multiple miners and clients in this system. The miners have their accounts and mine new blocks. The clients can control the transactions. For convenience, we only open one client in most of the transactions, although multiple clients are supported. The filepath is /osdata/osgroup6/final_project21 for part 1 and /osdata/osgroup6/final_project22 for part 2.
+
+To show the normal situation, we just run /osdata/osgroup6/final_project21/execute.py and open /osdata/osgroup6/final_project21/build/client_five in another bash to type in commands. (the ``execute'' and ``start_client'' in our Makefile can do the same thing)
+
+To show malicious situations, we can run /osdata/osgroup6/final_project21/execute1.py, /osdata/osgroup6/final_project21/execute2.py or /osdata/osgroup6/final_project21/execute3.py and open a /osdata/osgroup6/final_project21/build/client each time.
+The same is for lying situation except that we should run /osdata/osgroup6/final_project21/execute_lazy.py to start miners.
+
+To show the situation of forking, we can run /osdata/osgroup6/final_project21/execute_fork.py and open a /osdata/osgroup6/final_project21/build/client_fork in another bash.
